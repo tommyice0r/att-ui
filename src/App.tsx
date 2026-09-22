@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Play, Check, Trash2,
-  Settings, Bot, Shield, Network, Users, Target, LogOut, Plus
+  Settings, Bot, Shield, Network, Users, Target, LogOut, Plus,
+  Eye, EyeOff
 } from "lucide-react";
 import { loadSession, clearSession } from "./auth/authApi";
 import { fetchAllLicenses, addLicenseDays, createNewLicense, type LicenseItem } from "./api/adminApi";
@@ -46,6 +47,7 @@ export default function App() {
   const [licenses, setLicenses] = useState<LicenseItem[]>([]);
   const [licenseSearch, setLicenseSearch] = useState("");
   const [loadingLicenses, setLoadingLicenses] = useState(false);
+  const [showProxyPass2, setShowProxyPass2] = useState(false);
 
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const session = loadSession();
@@ -544,73 +546,76 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Proxies */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-white/[0.04]">
-                  {/* Proxy AdsPower */}
-                  <div className="p-3.5 rounded-xl bg-[#0d1015] border border-white/[0.06] space-y-2">
-                    <div className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                      <Network size={13} className="text-[#e5a93c]" />
-                      Proxy AdsPower
+                {/* Proxy Generador de Leads */}
+                <div className="pt-2 border-t border-white/[0.04]">
+                  <div className="p-3.5 rounded-xl bg-[#0d1015] border border-white/[0.06] space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                        <Network size={13} className="text-[#e5a93c]" />
+                        Proxy Generador de Leads (ZabaSearch)
+                      </div>
+                      <span className="text-[10px] text-slate-500 font-mono">
+                        Consumido por GENERARPERFILES
+                      </span>
                     </div>
-                    <div className="grid grid-cols-5 gap-2">
-                      <input
-                        value={config.PROXY_TYPE}
-                        onChange={(e) => updateField("PROXY_TYPE", e.target.value)}
-                        placeholder="Tipo"
-                        className="bg-[#151820] border border-white/[0.06] rounded-lg px-2.5 py-1.5 text-xs text-white"
-                      />
-                      <input
-                        value={config.PROXY_SERVER}
-                        onChange={(e) => updateField("PROXY_SERVER", e.target.value)}
-                        placeholder="Host"
-                        className="col-span-2 bg-[#151820] border border-white/[0.06] rounded-lg px-2.5 py-1.5 text-xs text-white font-mono"
-                      />
-                      <input
-                        value={config.PROXY_PORT}
-                        onChange={(e) => updateField("PROXY_PORT", e.target.value)}
-                        placeholder="Puerto"
-                        className="bg-[#151820] border border-white/[0.06] rounded-lg px-2.5 py-1.5 text-xs text-white font-mono"
-                      />
-                      <input
-                        value={config.PROXY_USER}
-                        onChange={(e) => updateField("PROXY_USER", e.target.value)}
-                        placeholder="User"
-                        className="bg-[#151820] border border-white/[0.06] rounded-lg px-2.5 py-1.5 text-xs text-white"
-                      />
-                    </div>
-                  </div>
 
-                  {/* Proxy Generador */}
-                  <div className="p-3.5 rounded-xl bg-[#0d1015] border border-white/[0.06] space-y-2">
-                    <div className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                      <Network size={13} className="text-[#e5a93c]" />
-                      Proxy Generador de Perfiles
-                    </div>
-                    <div className="grid grid-cols-5 gap-2">
-                      <input
-                        value={config.PROXY_TYPE_2}
-                        onChange={(e) => updateField("PROXY_TYPE_2", e.target.value)}
-                        placeholder="Tipo"
-                        className="bg-[#151820] border border-white/[0.06] rounded-lg px-2.5 py-1.5 text-xs text-white"
-                      />
-                      <input
-                        value={config.PROXY_SERVER_2}
-                        onChange={(e) => updateField("PROXY_SERVER_2", e.target.value)}
-                        placeholder="Host"
-                        className="col-span-2 bg-[#151820] border border-white/[0.06] rounded-lg px-2.5 py-1.5 text-xs text-white font-mono"
-                      />
-                      <input
-                        value={config.PROXY_PORT_2}
-                        onChange={(e) => updateField("PROXY_PORT_2", e.target.value)}
-                        placeholder="Puerto"
-                        className="bg-[#151820] border border-white/[0.06] rounded-lg px-2.5 py-1.5 text-xs text-white font-mono"
-                      />
-                      <input
-                        value={config.PROXY_USER_2}
-                        onChange={(e) => updateField("PROXY_USER_2", e.target.value)}
-                        placeholder="User"
-                        className="bg-[#151820] border border-white/[0.06] rounded-lg px-2.5 py-1.5 text-xs text-white"
-                      />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2">
+                      <div>
+                        <label className="text-[10px] text-slate-400 mb-1 block">Tipo</label>
+                        <input
+                          value={config.PROXY_TYPE_2}
+                          onChange={(e) => updateField("PROXY_TYPE_2", e.target.value)}
+                          placeholder="http / socks5"
+                          className="w-full bg-[#151820] border border-white/[0.06] rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-[#e5a93c]/40 font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-400 mb-1 block">Host / Servidor</label>
+                        <input
+                          value={config.PROXY_SERVER_2}
+                          onChange={(e) => updateField("PROXY_SERVER_2", e.target.value)}
+                          placeholder="Host o IP"
+                          className="w-full bg-[#151820] border border-white/[0.06] rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-[#e5a93c]/40 font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-400 mb-1 block">Puerto</label>
+                        <input
+                          value={config.PROXY_PORT_2}
+                          onChange={(e) => updateField("PROXY_PORT_2", e.target.value)}
+                          placeholder="1000"
+                          className="w-full bg-[#151820] border border-white/[0.06] rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-[#e5a93c]/40 font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-400 mb-1 block">Usuario</label>
+                        <input
+                          value={config.PROXY_USER_2}
+                          onChange={(e) => updateField("PROXY_USER_2", e.target.value)}
+                          placeholder="User"
+                          className="w-full bg-[#151820] border border-white/[0.06] rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-[#e5a93c]/40"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-400 mb-1 block">Contraseña</label>
+                        <div className="relative">
+                          <input
+                            type={showProxyPass2 ? "text" : "password"}
+                            value={config.PROXY_PASS_2}
+                            onChange={(e) => updateField("PROXY_PASS_2", e.target.value)}
+                            placeholder="Password"
+                            className="w-full bg-[#151820] border border-white/[0.06] rounded-lg px-2.5 py-1.5 pr-8 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-[#e5a93c]/40 font-mono"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowProxyPass2(!showProxyPass2)}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
+                            tabIndex={-1}
+                          >
+                            {showProxyPass2 ? <EyeOff size={13} /> : <Eye size={13} />}
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
