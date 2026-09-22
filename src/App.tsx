@@ -51,7 +51,7 @@ export default function App() {
 
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const session = loadSession();
-  const isMasterUser = session?.isMaster ?? true;
+  const isMasterUser = Boolean(session?.isMaster);
 
   const API_URL = getHelperApiUrl();
 
@@ -105,9 +105,13 @@ export default function App() {
   // Cargar licencias si se entra en la pestaña admin
   useEffect(() => {
     if (activeTab === "admin") {
-      loadLicenses();
+      if (isMasterUser) {
+        loadLicenses();
+      } else {
+        setActiveTab("bot");
+      }
     }
-  }, [activeTab]);
+  }, [activeTab, isMasterUser]);
 
   async function loadLicenses() {
     setLoadingLicenses(true);
@@ -278,22 +282,24 @@ export default function App() {
               Operación del Bot
             </button>
 
-            <button
-              onClick={() => setActiveTab("admin")}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all text-left ${
-                activeTab === "admin"
-                  ? "bg-[#e5a93c]/10 text-[#e5a93c] border border-[#e5a93c]/25 font-semibold"
-                  : "text-slate-400 hover:text-white hover:bg-white/[0.02] font-medium"
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <Shield size={15} className={activeTab === "admin" ? "text-[#e5a93c]" : "text-slate-400"} />
-                Licencias de Clientes
-              </div>
-              <span className="text-[9px] px-1.5 py-0.2 rounded bg-white/[0.05] border border-white/[0.08] text-slate-300 font-mono">
-                ADMIN
-              </span>
-            </button>
+            {isMasterUser && (
+              <button
+                onClick={() => setActiveTab("admin")}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all text-left ${
+                  activeTab === "admin"
+                    ? "bg-[#e5a93c]/10 text-[#e5a93c] border border-[#e5a93c]/25 font-semibold"
+                    : "text-slate-400 hover:text-white hover:bg-white/[0.02] font-medium"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <Shield size={15} className={activeTab === "admin" ? "text-[#e5a93c]" : "text-slate-400"} />
+                  Licencias de Clientes
+                </div>
+                <span className="text-[9px] px-1.5 py-0.2 rounded bg-white/[0.05] border border-white/[0.08] text-slate-300 font-mono">
+                  ADMIN
+                </span>
+              </button>
+            )}
           </div>
 
           {/* Auto-Guardado en Sidebar */}
@@ -625,7 +631,7 @@ export default function App() {
           )}
 
           {/* TAB 2: ADMINISTRACIÓN DE LICENCIAS */}
-          {activeTab === "admin" && (
+          {activeTab === "admin" && isMasterUser && (
             <div className="space-y-5">
               <div className="bg-[#151820] border border-white/[0.06] rounded-2xl p-5 space-y-4">
                 

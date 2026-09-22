@@ -17,12 +17,25 @@ export interface LicenseItem {
 }
 
 import { getApiBaseUrl } from "@/utils/env";
+import { loadSession } from "../auth/authApi";
+
+function getAdminHeaders(): HeadersInit {
+  const session = loadSession();
+  const key = session?.accessKey || "";
+  return {
+    "Content-Type": "application/json",
+    "X-Admin-Key": key,
+    "Authorization": `Bearer ${key}`
+  };
+}
 
 export async function fetchAllLicenses(): Promise<LicenseItem[]> {
+  const session = loadSession();
   const url = `${getApiBaseUrl()}/Api/ClientAccess/admin/list`;
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" }
+    headers: getAdminHeaders(),
+    body: JSON.stringify({ adminKey: session?.accessKey || "" })
   });
   const data = await res.json();
   if (!data.success) {
@@ -32,11 +45,12 @@ export async function fetchAllLicenses(): Promise<LicenseItem[]> {
 }
 
 export async function addLicenseDays(accessKey: string, days: number): Promise<{ success: boolean; message: string; expiresAt: string }> {
+  const session = loadSession();
   const url = `${getApiBaseUrl()}/Api/ClientAccess/admin/add-days`;
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ accessKey, days })
+    headers: getAdminHeaders(),
+    body: JSON.stringify({ accessKey, days, adminKey: session?.accessKey || "" })
   });
   const data = await res.json();
   if (!data.success) {
@@ -46,11 +60,12 @@ export async function addLicenseDays(accessKey: string, days: number): Promise<{
 }
 
 export async function createNewLicense(clientName: string, daysActive = 30): Promise<LicenseItem> {
+  const session = loadSession();
   const url = `${getApiBaseUrl()}/Api/ClientAccess/admin/create`;
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ clientName, daysActive })
+    headers: getAdminHeaders(),
+    body: JSON.stringify({ clientName, daysActive, adminKey: session?.accessKey || "" })
   });
   const data = await res.json();
   if (!data.success) {
