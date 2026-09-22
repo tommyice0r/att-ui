@@ -16,6 +16,20 @@ export interface LicenseItem {
   createdAt: string;
 }
 
+export interface AccessLogItem {
+  logId: number;
+  accessKey: string;
+  clientName: string;
+  machineName: string;
+  ipAddress: string;
+  endpoint: string;
+  actionStatus: string;
+  canRun: boolean;
+  workerId: number;
+  message: string;
+  createdAt: string;
+}
+
 import { getApiBaseUrl } from "@/utils/env";
 import { loadSession } from "../auth/authApi";
 
@@ -70,6 +84,21 @@ export async function createNewLicense(clientName: string, daysActive = 30): Pro
   const data = await res.json();
   if (!data.success) {
     throw new Error(data.message || "Error al crear licencia.");
+  }
+  return data.data;
+}
+
+export async function fetchAccessLogs(search = "", limit = 100): Promise<AccessLogItem[]> {
+  const session = loadSession();
+  const url = `${getApiBaseUrl()}/Api/ClientAccess/admin/logs`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: getAdminHeaders(),
+    body: JSON.stringify({ adminKey: session?.accessKey || "", search, limit })
+  });
+  const data = await res.json();
+  if (!data.success) {
+    throw new Error(data.message || "Error al obtener logs de acceso.");
   }
   return data.data;
 }

@@ -2,10 +2,17 @@ import { useEffect, useRef, useState } from "react";
 import {
   Play, Check, Trash2,
   Settings, Bot, Shield, Network, Users, Target, LogOut, Plus,
-  Eye, EyeOff
+  Eye, EyeOff, Monitor, Globe, Clock, Activity, RefreshCw
 } from "lucide-react";
 import { loadSession, clearSession } from "./auth/authApi";
-import { fetchAllLicenses, addLicenseDays, createNewLicense, type LicenseItem } from "./api/adminApi";
+import {
+  fetchAllLicenses,
+  addLicenseDays,
+  createNewLicense,
+  fetchAccessLogs,
+  type LicenseItem,
+  type AccessLogItem
+} from "./api/adminApi";
 import { getHelperApiUrl } from "@/utils/env";
 
 const APP_NAME = import.meta.env["VITE_APP_NAME"] ?? "ATT BOT";
@@ -48,6 +55,12 @@ export default function App() {
   const [licenseSearch, setLicenseSearch] = useState("");
   const [loadingLicenses, setLoadingLicenses] = useState(false);
   const [showProxyPass2, setShowProxyPass2] = useState(false);
+
+  // Auditoría y Logs Admin State
+  const [adminSubTab, setAdminSubTab] = useState<"licenses" | "logs">("licenses");
+  const [logs, setLogs] = useState<AccessLogItem[]>([]);
+  const [logSearch, setLogSearch] = useState("");
+  const [loadingLogs, setLoadingLogs] = useState(false);
 
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const session = loadSession();
@@ -102,16 +115,20 @@ export default function App() {
     }
   }
 
-  // Cargar licencias si se entra en la pestaña admin
+  // Cargar licencias o logs si se entra en la pestaña admin
   useEffect(() => {
     if (activeTab === "admin") {
       if (isMasterUser) {
-        loadLicenses();
+        if (adminSubTab === "licenses") {
+          loadLicenses();
+        } else {
+          loadLogs();
+        }
       } else {
         setActiveTab("bot");
       }
     }
-  }, [activeTab, isMasterUser]);
+  }, [activeTab, adminSubTab, isMasterUser]);
 
   async function loadLicenses() {
     setLoadingLicenses(true);
@@ -122,6 +139,19 @@ export default function App() {
       // Ignorar si no hay conexión aún
     } finally {
       setLoadingLicenses(false);
+    }
+  }
+
+  async function loadLogs(searchQuery?: string) {
+    setLoadingLogs(true);
+    try {
+      const q = searchQuery !== undefined ? searchQuery : logSearch;
+      const data = await fetchAccessLogs(q, 100);
+      setLogs(data);
+    } catch {
+      // Ignorar si no hay conexión aún
+    } finally {
+      setLoadingLogs(false);
     }
   }
 
@@ -247,6 +277,71 @@ export default function App() {
       l.clientName.toLowerCase().includes(licenseSearch.toLowerCase()) ||
       l.accessKey.toLowerCase().includes(licenseSearch.toLowerCase())
   );
+
+  const filteredLogs = logs.filter((l) => {
+    const q = logSearch.toLowerCase().trim();
+    if (!q) return true;
+    return (
+      (l.clientName && l.clientName.toLowerCase().includes(q)) ||
+      (l.accessKey && l.accessKey.toLowerCase().includes(q)) ||
+      (l.machineName && l.machineName.toLowerCase().includes(q)) ||
+      (l.ipAddress && l.ipAddress.toLowerCase().includes(q)) ||
+      (l.actionStatus && l.actionStatus.toLowerCase().includes(q)) ||
+      (l.message && l.message.toLowerCase().includes(q))
+    );
+  });
+
+  function formatLogDate(dateStr: string) {
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleString("es-ES", {
+        day: "2-digit",
+        month: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+    } catch {
+      return dateStr;
+    }
+  }
+
+  function renderLogStatusBadge(status: string) {
+    const s = (status || "").toUpperCase();
+    if (s === "ACTIVE" || s === "SUCCESS") {
+      return (
+        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+          AUTORIZADO
+        </span>
+      );
+    }
+    if (s === "BLOCKED") {
+      return (
+        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+          BLOQUEADO (VENCIDO)
+        </span>
+      );
+    }
+    if (s === "INVALID") {
+      return (
+        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+          CLAVE INVÁLIDA
+        </span>
+      );
+    }
+    if (s === "DENIED") {
+      return (
+        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/10 text-purple-400 border border-purple-500/20">
+          DENEGADO (403)
+        </span>
+      );
+    }
+    return (
+      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-500/10 text-slate-400 border border-slate-500/20">
+        {status}
+      </span>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#0b0d11] text-slate-300 flex text-sm selection:bg-amber-500/20 font-sans">
@@ -630,165 +725,324 @@ export default function App() {
             </div>
           )}
 
-          {/* TAB 2: ADMINISTRACIÓN DE LICENCIAS */}
+          {/* TAB 2: ADMINISTRACIÓN DE LICENCIAS Y AUDITORÍA */}
           {activeTab === "admin" && isMasterUser && (
             <div className="space-y-5">
               <div className="bg-[#151820] border border-white/[0.06] rounded-2xl p-5 space-y-4">
                 
-                {/* Admin Header */}
-                <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-white/[0.06]">
-                  <div>
-                    <h2 className="text-sm font-bold text-white uppercase tracking-wider">
-                      Administración de Licencias
-                    </h2>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Suma días a cualquier licencia en 1 solo clic sin abrir bases de datos externas.
-                    </p>
-                  </div>
-
+                {/* Sub-Tabs de Navegación Admin */}
+                <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
                   <div className="flex items-center gap-2">
-                    <input
-                      value={licenseSearch}
-                      onChange={(e) => setLicenseSearch(e.target.value)}
-                      type="text"
-                      placeholder="Buscar cliente..."
-                      className="bg-[#0d1015] border border-white/[0.06] rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-[#e5a93c]/50 font-sans w-52"
-                    />
                     <button
-                      onClick={handleCreateLicense}
-                      className="bg-[#d49a37] hover:bg-[#e5a93c] text-[#0b0d11] font-bold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 shadow-sm transition-all"
+                      onClick={() => setAdminSubTab("licenses")}
+                      className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                        adminSubTab === "licenses"
+                          ? "bg-[#e5a93c]/15 text-[#e5a93c] border border-[#e5a93c]/30"
+                          : "text-slate-400 hover:text-white hover:bg-white/[0.03]"
+                      }`}
                     >
-                      <Plus size={13} strokeWidth={3} />
-                      Nueva Licencia
+                      <Shield size={14} />
+                      Licencias de Clientes ({licenses.length})
+                    </button>
+                    <button
+                      onClick={() => setAdminSubTab("logs")}
+                      className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                        adminSubTab === "logs"
+                          ? "bg-[#e5a93c]/15 text-[#e5a93c] border border-[#e5a93c]/30"
+                          : "text-slate-400 hover:text-white hover:bg-white/[0.03]"
+                      }`}
+                    >
+                      <Activity size={14} />
+                      Auditoría y Logs de Accesos ({logs.length})
                     </button>
                   </div>
-                </div>
 
-                {/* Counters */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <div className="p-3 rounded-xl bg-[#0d1015] border border-white/[0.06]">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total</span>
-                    <div className="text-xl font-bold text-white font-mono mt-0.5">{licenses.length}</div>
-                  </div>
-                  <div className="p-3 rounded-xl bg-[#0d1015] border border-white/[0.06]">
-                    <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Activas</span>
-                    <div className="text-xl font-bold text-emerald-400 font-mono mt-0.5">
-                      {licenses.filter((l) => l.realAccessStatus === "ACTIVE").length}
+                  {adminSubTab === "licenses" ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        value={licenseSearch}
+                        onChange={(e) => setLicenseSearch(e.target.value)}
+                        type="text"
+                        placeholder="Buscar cliente..."
+                        className="bg-[#0d1015] border border-white/[0.06] rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-[#e5a93c]/50 font-sans w-52"
+                      />
+                      <button
+                        onClick={handleCreateLicense}
+                        className="bg-[#d49a37] hover:bg-[#e5a93c] text-[#0b0d11] font-bold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 shadow-sm transition-all"
+                      >
+                        <Plus size={13} strokeWidth={3} />
+                        Nueva Licencia
+                      </button>
                     </div>
-                  </div>
-                  <div className="p-3 rounded-xl bg-[#0d1015] border border-white/[0.06]">
-                    <span className="text-[10px] font-bold text-[#e5a93c] uppercase tracking-wider">En Gracia</span>
-                    <div className="text-xl font-bold text-[#e5a93c] font-mono mt-0.5">
-                      {licenses.filter((l) => l.realAccessStatus === "GRACE").length}
-                    </div>
-                  </div>
-                  <div className="p-3 rounded-xl bg-[#0d1015] border border-white/[0.06]">
-                    <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider">Bloqueadas</span>
-                    <div className="text-xl font-bold text-rose-400 font-mono mt-0.5">
-                      {licenses.filter((l) => l.realAccessStatus === "BLOCKED").length}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Table of Licenses */}
-                <div className="overflow-x-auto">
-                  {loadingLicenses ? (
-                    <div className="py-8 text-center text-xs text-slate-500">Cargando licencias...</div>
-                  ) : filteredLicenses.length === 0 ? (
-                    <div className="py-8 text-center text-xs text-slate-500">No se encontraron licencias.</div>
                   ) : (
-                    <table className="w-full text-left text-xs">
-                      <thead>
-                        <tr className="text-slate-500 border-b border-white/[0.06]">
-                          <th className="pb-2.5 font-medium">Cliente</th>
-                          <th className="pb-2.5 font-medium">Clave</th>
-                          <th className="pb-2.5 font-medium">Estado</th>
-                          <th className="pb-2.5 font-medium">Días Restantes</th>
-                          <th className="pb-2.5 font-medium">Último Pago</th>
-                          <th className="pb-2.5 font-medium">Vencimiento</th>
-                          <th className="pb-2.5 font-medium text-right">Sumar Días (1 Clic)</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-white/[0.03]">
-                        {filteredLicenses.map((lic) => {
-                          const expDate = new Date(lic.expiresAt);
-                          const daysLeft = lic.daysLeft !== undefined 
-                            ? lic.daysLeft 
-                            : Math.max(0, Math.ceil((expDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
-
-                          let badgeClass = "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
-                          let badgeText = "ACTIVA";
-
-                          if (lic.isMaster) {
-                            badgeClass = "bg-[#e5a93c]/15 text-[#e5a93c] border-[#e5a93c]/30";
-                            badgeText = "ROOT";
-                          } else if (lic.realAccessStatus === "GRACE") {
-                            badgeClass = "bg-[#e5a93c]/10 text-[#e5a93c] border-[#e5a93c]/20";
-                            badgeText = `GRACIA (${lic.overdueDays}d)`;
-                          } else if (lic.realAccessStatus === "BLOCKED") {
-                            badgeClass = "bg-rose-500/10 text-rose-400 border-rose-500/20";
-                            badgeText = "BLOQUEADA";
-                          }
-
-                          return (
-                            <tr key={lic.accessId} className="hover:bg-white/[0.015] transition-colors">
-                              <td className="py-2.5 font-medium text-white">{lic.clientName}</td>
-                              <td className="py-2.5 font-mono text-[#e5a93c] font-semibold">{lic.accessKey}</td>
-                              <td className="py-2.5">
-                                <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${badgeClass}`}>
-                                  {badgeText}
-                                </span>
-                              </td>
-                              <td className="py-2.5 font-mono">
-                                {lic.isMaster ? (
-                                  <span className="text-[#e5a93c] text-xs">Ilimitado</span>
-                                ) : (
-                                  <span className={daysLeft > 0 ? "text-emerald-400 font-semibold" : "text-rose-400 font-semibold"}>
-                                    {daysLeft > 0 ? `${daysLeft}d` : "Vencida"}
-                                  </span>
-                                )}
-                              </td>
-                              <td className="py-2.5 font-mono text-slate-400 text-[11px]">
-                                {lic.lastPaymentAt ? new Date(lic.lastPaymentAt).toLocaleDateString("es-ES") : "Sin registro"}
-                              </td>
-                              <td className="py-2.5 font-mono text-slate-300">
-                                {lic.isMaster
-                                  ? "Permanente"
-                                  : expDate.toLocaleDateString("es-ES")}
-                              </td>
-                              <td className="py-2.5 text-right space-x-1">
-                                <button
-                                  onClick={() => handleAddDays(lic.accessKey, 7, lic.clientName)}
-                                  className="px-2 py-1 bg-white/[0.04] hover:bg-white/[0.08] text-slate-200 border border-white/[0.08] font-medium text-xs rounded transition-all"
-                                >
-                                  +7d
-                                </button>
-                                <button
-                                  onClick={() => handleAddDays(lic.accessKey, 15, lic.clientName)}
-                                  className="px-2 py-1 bg-white/[0.04] hover:bg-white/[0.08] text-slate-200 border border-white/[0.08] font-medium text-xs rounded transition-all"
-                                >
-                                  +15d
-                                </button>
-                                <button
-                                  onClick={() => handleAddDays(lic.accessKey, 30, lic.clientName)}
-                                  className="px-2.5 py-1 bg-[#d49a37] hover:bg-[#e5a93c] text-[#0b0d11] font-bold text-xs rounded transition-all shadow-sm"
-                                >
-                                  +30d
-                                </button>
-                                <button
-                                  onClick={() => handleAddDays(lic.accessKey, 60, lic.clientName)}
-                                  className="px-2 py-1 bg-white/[0.04] hover:bg-white/[0.08] text-slate-200 border border-white/[0.08] font-medium text-xs rounded transition-all"
-                                >
-                                  +60d
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                    <div className="flex items-center gap-2">
+                      <input
+                        value={logSearch}
+                        onChange={(e) => setLogSearch(e.target.value)}
+                        type="text"
+                        placeholder="Buscar por PC, IP, cliente..."
+                        className="bg-[#0d1015] border border-white/[0.06] rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-[#e5a93c]/50 font-sans w-56"
+                      />
+                      <button
+                        onClick={() => loadLogs()}
+                        className="bg-white/[0.06] hover:bg-white/[0.1] text-slate-200 font-semibold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 border border-white/[0.08] transition-all"
+                      >
+                        <RefreshCw size={13} className={loadingLogs ? "animate-spin text-[#e5a93c]" : ""} />
+                        Actualizar
+                      </button>
+                    </div>
                   )}
                 </div>
+
+                {adminSubTab === "licenses" && (
+                  <>
+                    {/* Header Info */}
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h2 className="text-sm font-bold text-white uppercase tracking-wider">
+                          Administración de Licencias
+                        </h2>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          Suma días a cualquier licencia en 1 solo clic sin abrir bases de datos externas.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Counters */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div className="p-3 rounded-xl bg-[#0d1015] border border-white/[0.06]">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total</span>
+                        <div className="text-xl font-bold text-white font-mono mt-0.5">{licenses.length}</div>
+                      </div>
+                      <div className="p-3 rounded-xl bg-[#0d1015] border border-white/[0.06]">
+                        <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Activas</span>
+                        <div className="text-xl font-bold text-emerald-400 font-mono mt-0.5">
+                          {licenses.filter((l) => l.realAccessStatus === "ACTIVE").length}
+                        </div>
+                      </div>
+                      <div className="p-3 rounded-xl bg-[#0d1015] border border-white/[0.06]">
+                        <span className="text-[10px] font-bold text-[#e5a93c] uppercase tracking-wider">En Gracia</span>
+                        <div className="text-xl font-bold text-[#e5a93c] font-mono mt-0.5">
+                          {licenses.filter((l) => l.realAccessStatus === "GRACE").length}
+                        </div>
+                      </div>
+                      <div className="p-3 rounded-xl bg-[#0d1015] border border-white/[0.06]">
+                        <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider">Bloqueadas</span>
+                        <div className="text-xl font-bold text-rose-400 font-mono mt-0.5">
+                          {licenses.filter((l) => l.realAccessStatus === "BLOCKED").length}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Table of Licenses */}
+                    <div className="overflow-x-auto">
+                      {loadingLicenses ? (
+                        <div className="py-8 text-center text-xs text-slate-500">Cargando licencias...</div>
+                      ) : filteredLicenses.length === 0 ? (
+                        <div className="py-8 text-center text-xs text-slate-500">No se encontraron licencias.</div>
+                      ) : (
+                        <table className="w-full text-left text-xs">
+                          <thead>
+                            <tr className="text-slate-500 border-b border-white/[0.06]">
+                              <th className="pb-2.5 font-medium">Cliente</th>
+                              <th className="pb-2.5 font-medium">Clave</th>
+                              <th className="pb-2.5 font-medium">Estado</th>
+                              <th className="pb-2.5 font-medium">Días Restantes</th>
+                              <th className="pb-2.5 font-medium">Último Pago</th>
+                              <th className="pb-2.5 font-medium">Vencimiento</th>
+                              <th className="pb-2.5 font-medium text-right">Sumar Días (1 Clic)</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-white/[0.03]">
+                            {filteredLicenses.map((lic) => {
+                              const expDate = new Date(lic.expiresAt);
+                              const daysLeft = lic.daysLeft !== undefined 
+                                ? lic.daysLeft 
+                                : Math.max(0, Math.ceil((expDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+
+                              let badgeClass = "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
+                              let badgeText = "ACTIVA";
+
+                              if (lic.isMaster) {
+                                badgeClass = "bg-[#e5a93c]/15 text-[#e5a93c] border-[#e5a93c]/30";
+                                badgeText = "ROOT";
+                              } else if (lic.realAccessStatus === "GRACE") {
+                                badgeClass = "bg-[#e5a93c]/10 text-[#e5a93c] border-[#e5a93c]/20";
+                                badgeText = `GRACIA (${lic.overdueDays}d)`;
+                              } else if (lic.realAccessStatus === "BLOCKED") {
+                                badgeClass = "bg-rose-500/10 text-rose-400 border-rose-500/20";
+                                badgeText = "BLOQUEADA";
+                              }
+
+                              return (
+                                <tr key={lic.accessId} className="hover:bg-white/[0.015] transition-colors">
+                                  <td className="py-2.5 font-medium text-white">{lic.clientName}</td>
+                                  <td className="py-2.5 font-mono text-[#e5a93c] font-semibold">{lic.accessKey}</td>
+                                  <td className="py-2.5">
+                                    <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${badgeClass}`}>
+                                      {badgeText}
+                                    </span>
+                                  </td>
+                                  <td className="py-2.5 font-mono">
+                                    {lic.isMaster ? (
+                                      <span className="text-[#e5a93c] text-xs">Ilimitado</span>
+                                    ) : (
+                                      <span className={daysLeft > 0 ? "text-emerald-400 font-semibold" : "text-rose-400 font-semibold"}>
+                                        {daysLeft > 0 ? `${daysLeft}d` : "Vencida"}
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="py-2.5 font-mono text-slate-400 text-[11px]">
+                                    {lic.lastPaymentAt ? new Date(lic.lastPaymentAt).toLocaleDateString("es-ES") : "Sin registro"}
+                                  </td>
+                                  <td className="py-2.5 font-mono text-slate-300">
+                                    {lic.isMaster
+                                      ? "Permanente"
+                                      : expDate.toLocaleDateString("es-ES")}
+                                  </td>
+                                  <td className="py-2.5 text-right space-x-1">
+                                    <button
+                                      onClick={() => handleAddDays(lic.accessKey, 7, lic.clientName)}
+                                      className="px-2 py-1 bg-white/[0.04] hover:bg-white/[0.08] text-slate-200 border border-white/[0.08] font-medium text-xs rounded transition-all"
+                                    >
+                                      +7d
+                                    </button>
+                                    <button
+                                      onClick={() => handleAddDays(lic.accessKey, 15, lic.clientName)}
+                                      className="px-2 py-1 bg-white/[0.04] hover:bg-white/[0.08] text-slate-200 border border-white/[0.08] font-medium text-xs rounded transition-all"
+                                    >
+                                      +15d
+                                    </button>
+                                    <button
+                                      onClick={() => handleAddDays(lic.accessKey, 30, lic.clientName)}
+                                      className="px-2.5 py-1 bg-[#d49a37] hover:bg-[#e5a93c] text-[#0b0d11] font-bold text-xs rounded transition-all shadow-sm"
+                                    >
+                                      +30d
+                                    </button>
+                                    <button
+                                      onClick={() => handleAddDays(lic.accessKey, 60, lic.clientName)}
+                                      className="px-2 py-1 bg-white/[0.04] hover:bg-white/[0.08] text-slate-200 border border-white/[0.08] font-medium text-xs rounded transition-all"
+                                    >
+                                      +60d
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {adminSubTab === "logs" && (
+                  <>
+                    {/* Header Info */}
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h2 className="text-sm font-bold text-white uppercase tracking-wider">
+                          Auditoría y Logs de Accesos
+                        </h2>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          Historial en vivo de peticiones: PCs de clientes, IPs, claves validadas y bloqueos de seguridad.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Counters Logs */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div className="p-3 rounded-xl bg-[#0d1015] border border-white/[0.06]">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Peticiones</span>
+                        <div className="text-xl font-bold text-white font-mono mt-0.5">{logs.length}</div>
+                      </div>
+                      <div className="p-3 rounded-xl bg-[#0d1015] border border-white/[0.06]">
+                        <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Autorizadas</span>
+                        <div className="text-xl font-bold text-emerald-400 font-mono mt-0.5">
+                          {logs.filter((l) => l.canRun).length}
+                        </div>
+                      </div>
+                      <div className="p-3 rounded-xl bg-[#0d1015] border border-white/[0.06]">
+                        <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider">Bloqueadas (Vencidas)</span>
+                        <div className="text-xl font-bold text-rose-400 font-mono mt-0.5">
+                          {logs.filter((l) => l.actionStatus === "BLOCKED").length}
+                        </div>
+                      </div>
+                      <div className="p-3 rounded-xl bg-[#0d1015] border border-white/[0.06]">
+                        <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">Inválidas / Denegadas</span>
+                        <div className="text-xl font-bold text-amber-400 font-mono mt-0.5">
+                          {logs.filter((l) => l.actionStatus === "INVALID" || l.actionStatus === "DENIED").length}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Table of Logs */}
+                    <div className="overflow-x-auto">
+                      {loadingLogs ? (
+                        <div className="py-8 text-center text-xs text-slate-500">Cargando registros de auditoría...</div>
+                      ) : filteredLogs.length === 0 ? (
+                        <div className="py-8 text-center text-xs text-slate-500">No se encontraron peticiones registradas.</div>
+                      ) : (
+                        <table className="w-full text-left text-xs">
+                          <thead>
+                            <tr className="text-slate-500 border-b border-white/[0.06] text-[11px]">
+                              <th className="pb-2.5 px-2 font-medium">Fecha y Hora</th>
+                              <th className="pb-2.5 px-2 font-medium">Equipo / PC</th>
+                              <th className="pb-2.5 px-2 font-medium">IP</th>
+                              <th className="pb-2.5 px-2 font-medium">Cliente / Licencia</th>
+                              <th className="pb-2.5 px-2 font-medium">Origen</th>
+                              <th className="pb-2.5 px-2 font-medium">Estado</th>
+                              <th className="pb-2.5 px-2 font-medium">Mensaje / Detalle</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-white/[0.03]">
+                            {filteredLogs.map((log) => (
+                              <tr key={log.logId} className="hover:bg-white/[0.015] transition-colors">
+                                <td className="py-2.5 px-2 font-mono text-[11px] text-slate-400 whitespace-nowrap">
+                                  <div className="flex items-center gap-1.5">
+                                    <Clock size={12} className="text-slate-500" />
+                                    <span>{formatLogDate(log.createdAt)}</span>
+                                  </div>
+                                </td>
+                                <td className="py-2.5 px-2 text-white font-medium whitespace-nowrap">
+                                  <div className="flex items-center gap-1.5">
+                                    <Monitor size={13} className="text-[#e5a93c]" />
+                                    <span>{log.machineName || "Desconocido"}</span>
+                                  </div>
+                                </td>
+                                <td className="py-2.5 px-2 font-mono text-[11px] text-slate-400 whitespace-nowrap">
+                                  <div className="flex items-center gap-1.5">
+                                    <Globe size={12} className="text-slate-500" />
+                                    <span>{log.ipAddress || "Desconocida"}</span>
+                                  </div>
+                                </td>
+                                <td className="py-2.5 px-2">
+                                  <div className="font-semibold text-slate-200">
+                                    {log.clientName || "Sin registrar"}
+                                  </div>
+                                  <div className="font-mono text-[10px] text-slate-500">
+                                    {log.accessKey || "Sin clave"}
+                                  </div>
+                                </td>
+                                <td className="py-2.5 px-2 whitespace-nowrap">
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-white/[0.04] border border-white/[0.08] text-slate-300">
+                                    {log.endpoint}
+                                  </span>
+                                </td>
+                                <td className="py-2.5 px-2 whitespace-nowrap">
+                                  {renderLogStatusBadge(log.actionStatus)}
+                                </td>
+                                <td className="py-2.5 px-2 text-slate-400 text-[11px] max-w-xs truncate" title={log.message}>
+                                  {log.message || "-"}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  </>
+                )}
 
               </div>
             </div>
