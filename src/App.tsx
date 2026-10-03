@@ -55,6 +55,7 @@ export default function App() {
   const [licenseSearch, setLicenseSearch] = useState("");
   const [loadingLicenses, setLoadingLicenses] = useState(false);
   const [showProxyPass2, setShowProxyPass2] = useState(false);
+  const [showBotProxyPass, setShowBotProxyPass] = useState(false);
 
   // Auditoría y Logs Admin State
   const [adminSubTab, setAdminSubTab] = useState<"licenses" | "logs">("licenses");
