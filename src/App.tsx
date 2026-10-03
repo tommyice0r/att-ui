@@ -653,7 +653,7 @@ export default function App() {
                     <div className="flex items-center justify-between">
                       <div className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
                         <Network size={13} className="text-[#e5a93c]" />
-                        Proxy Generador de Leads (ZabaSearch)
+                        Proxy Generador Leads
                       </div>
                       <span className="text-[10px] text-slate-500 font-mono">
                         Consumido por GENERARPERFILES
@@ -714,6 +714,80 @@ export default function App() {
                             tabIndex={-1}
                           >
                             {showProxyPass2 ? <EyeOff size={13} /> : <Eye size={13} />}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Proxy Bot GoLogin */}
+                <div className="pt-2 border-t border-white/[0.04]">
+                  <div className="p-3.5 rounded-xl bg-[#0d1015] border border-white/[0.06] space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                        <Network size={13} className="text-[#e5a93c]" />
+                        Proxy Bot GoLogin
+                      </div>
+                      <span className="text-[10px] text-slate-500 font-mono">
+                        Consumido por el bot checker (V6)
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2">
+                      <div>
+                        <label className="text-[10px] text-slate-400 mb-1 block">Tipo</label>
+                        <input
+                          value={config.BOT_PROXY_TYPE}
+                          onChange={(e) => updateField("BOT_PROXY_TYPE", e.target.value)}
+                          placeholder="http / socks5"
+                          className="w-full bg-[#151820] border border-white/[0.06] rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-[#e5a93c]/40 font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-400 mb-1 block">Host / Servidor</label>
+                        <input
+                          value={config.BOT_PROXY_SERVER}
+                          onChange={(e) => updateField("BOT_PROXY_SERVER", e.target.value)}
+                          placeholder="Host o IP"
+                          className="w-full bg-[#151820] border border-white/[0.06] rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-[#e5a93c]/40 font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-400 mb-1 block">Puerto</label>
+                        <input
+                          value={config.BOT_PROXY_PORT}
+                          onChange={(e) => updateField("BOT_PROXY_PORT", e.target.value)}
+                          placeholder="1000"
+                          className="w-full bg-[#151820] border border-white/[0.06] rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-[#e5a93c]/40 font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-400 mb-1 block">Usuario</label>
+                        <input
+                          value={config.BOT_PROXY_USER}
+                          onChange={(e) => updateField("BOT_PROXY_USER", e.target.value)}
+                          placeholder="User"
+                          className="w-full bg-[#151820] border border-white/[0.06] rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-[#e5a93c]/40"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-400 mb-1 block">Contraseña</label>
+                        <div className="relative">
+                          <input
+                            type={showBotProxyPass ? "text" : "password"}
+                            value={config.BOT_PROXY_PASS}
+                            onChange={(e) => updateField("BOT_PROXY_PASS", e.target.value)}
+                            placeholder="Password"
+                            className="w-full bg-[#151820] border border-white/[0.06] rounded-lg px-2.5 py-1.5 pr-8 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-[#e5a93c]/40 font-mono"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowBotProxyPass(!showBotProxyPass)}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
+                            tabIndex={-1}
+                          >
+                            {showBotProxyPass ? <EyeOff size={13} /> : <Eye size={13} />}
                           </button>
                         </div>
                       </div>
