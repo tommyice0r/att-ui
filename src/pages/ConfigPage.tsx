@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { Settings, Save, Eye, EyeOff } from "lucide-react";
 import { getConfig, saveConfig } from "../api/clientApi";
 
@@ -9,7 +9,12 @@ const CONFIG_KEYS = [
   { key: "PROXY_SERVER_2", label: "Proxy Generador Servidor", type: "text" },
   { key: "PROXY_PORT_2", label: "Proxy Generador Puerto", type: "text" },
   { key: "PROXY_USER_2", label: "Proxy Generador Usuario", type: "text" },
-  { key: "PROXY_PASS_2", label: "Proxy Generador Contraseña", type: "password" },
+  { key: "PROXY_PASS_2", label: "Proxy Generador ContraseÃ±a", type: "password" },
+  { key: "BOT_PROXY_TYPE", label: "Proxy Bot Tipo (http/socks5)", type: "text" },
+  { key: "BOT_PROXY_SERVER", label: "Proxy Bot Servidor", type: "text" },
+  { key: "BOT_PROXY_PORT", label: "Proxy Bot Puerto", type: "text" },
+  { key: "BOT_PROXY_USER", label: "Proxy Bot Usuario", type: "text" },
+  { key: "BOT_PROXY_PASS", label: "Proxy Bot Contraseña", type: "password" },
 ];
 
 export default function ConfigPage() {
@@ -37,7 +42,7 @@ export default function ConfigPage() {
       for (const [key, value] of Object.entries(config)) {
         await saveConfig(key, value);
       }
-      setMessage("✓ Configuración guardada");
+      setMessage("âœ“ ConfiguraciÃ³n guardada");
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Error");
     } finally {
@@ -52,8 +57,8 @@ export default function ConfigPage() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-xl font-semibold text-white tracking-tight">Configuración</h1>
-        <p className="text-slate-600 text-sm mt-0.5">Configuración global del sistema</p>
+        <h1 className="text-xl font-semibold text-white tracking-tight">ConfiguraciÃ³n</h1>
+        <p className="text-slate-600 text-sm mt-0.5">ConfiguraciÃ³n global del sistema</p>
       </div>
 
       {message && (
@@ -67,7 +72,7 @@ export default function ConfigPage() {
           <div className="p-1.5 rounded-lg bg-violet-500/[0.1] border border-violet-500/[0.12]">
             <Settings size={12} className="text-violet-400/80" />
           </div>
-          <h2 className="text-[13px] font-medium text-white/70 tracking-tight">Parámetros</h2>
+          <h2 className="text-[13px] font-medium text-white/70 tracking-tight">ParÃ¡metros</h2>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -111,7 +116,7 @@ export default function ConfigPage() {
           ) : (
             <>
               <Save size={15} />
-              Guardar configuración
+              Guardar configuraciÃ³n
             </>
           )}
         </button>
