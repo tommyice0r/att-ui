@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertTriangle, CalendarX, CheckCircle, LogOut, XCircle } from "lucide-react";
+import { toast } from "sonner";
 import LoginPage from "./LoginPage";
-import { loadSession, clearSession } from "./authApi";
+import { activateAccess, loadSession, saveSession, clearSession } from "./authApi";
 import type { AuthSession } from "./authTypes";
 
 const APP_AUTHOR = import.meta.env["VITE_APP_AUTHOR"] ?? "@Tommyice0";
@@ -73,11 +74,58 @@ export default function AuthGate({ children }: Props) {
     setGateState("login");
   }
 
+  async function syncLiveSession(s: AuthSession) {
+    try {
+      const resp = await activateAccess({ accessKey: s.accessKey });
+      if (resp.accessStatus === "BLOCKED") {
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        clearSession();
+        setSession(null);
+        setBlocked({
+          token:         resp.token ?? "",
+          accessId:      resp.accessId,
+          clientName:    resp.clientName,
+          accessKey:     resp.accessKey,
+          appCode:       resp.appCode,
+          accessStatus:  "BLOCKED",
+          expiresAt:     resp.expiresAt,
+          overdueDays:   resp.overdueDays,
+          lateFeePerDay: resp.lateFeePerDay,
+          lateFeeAmount: resp.lateFeeAmount,
+          currency:      resp.currency,
+          message:       resp.message,
+          verifiedAt:    new Date().toISOString(),
+        });
+        setGateState("blocked");
+        toast.error("Acceso bloqueado por falta de pago.");
+        return;
+      }
+
+      if (resp.accessStatus === "INVALID") {
+        forceReLogin("Tu licencia fue revocada o eliminada.");
+        toast.error("Tu licencia ya no se encuentra activa.");
+        return;
+      }
+
+      const updated = saveSession(resp);
+      setSession(updated);
+      if (updated.accessStatus === "GRACE")          setGateState("grace");
+      else if (updated.accessStatus === "EXCEPTION") setGateState("exception");
+      else                                           setGateState("active");
+    } catch {
+      // Si el servidor está temporalmente inalcanzable, mantener estado actual salvo expiración
+    }
+  }
+
   function startSessionWatch(s: AuthSession) {
     if (intervalRef.current) clearInterval(intervalRef.current);
     intervalRef.current = setInterval(() => {
-      if (isSessionExpired(s)) forceReLogin("Tu sesión debe verificarse de nuevo.");
-    }, 60_000);
+      if (isSessionExpired(s)) {
+        forceReLogin("Tu sesión debe verificarse de nuevo.");
+        return;
+      }
+      syncLiveSession(s);
+    }, 45_000);
   }
 
   /* Carga de sesión al montar */
@@ -105,6 +153,8 @@ export default function AuthGate({ children }: Props) {
     if (saved.accessStatus === "GRACE")          setGateState("grace");
     else if (saved.accessStatus === "EXCEPTION") setGateState("exception");
     else                                         setGateState("active");
+
+    syncLiveSession(saved);
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);

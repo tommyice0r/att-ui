@@ -54,7 +54,7 @@ export async function activateAccess(req: ActivateAccessRequest): Promise<Activa
     throw new Error("No se pudo conectar con el servidor de acceso.");
   }
 
-  if (!data.success) {
+  if (!data.success && data.accessStatus !== "BLOCKED") {
     throw new Error(data.message || "Clave de acceso inválida.");
   }
 

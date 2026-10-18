@@ -13,6 +13,8 @@ export interface LicenseItem {
   graceDays: number;
   lateFeePerDay: number;
   lateFeeAmount: number;
+  manualAllowUntil?: string | null;
+  manualAllowReason?: string | null;
   createdAt: string;
 }
 
@@ -58,7 +60,7 @@ export async function fetchAllLicenses(): Promise<LicenseItem[]> {
   return data.data;
 }
 
-export async function addLicenseDays(accessKey: string, days: number): Promise<{ success: boolean; message: string; expiresAt: string }> {
+export async function addLicenseDays(accessKey: string, days: number): Promise<{ success: boolean; message: string; expiresAt: string; daysLeft?: number }> {
   const session = loadSession();
   const url = `${getApiBaseUrl()}/Api/ClientAccess/admin/add-days`;
   const res = await fetch(url, {
@@ -68,24 +70,102 @@ export async function addLicenseDays(accessKey: string, days: number): Promise<{
   });
   const data = await res.json();
   if (!data.success) {
-    throw new Error(data.message || "Error al agregar días.");
+    throw new Error(data.message || "Error al ajustar días.");
   }
   return data;
 }
 
-export async function createNewLicense(clientName: string, daysActive = 30): Promise<LicenseItem> {
+export async function createNewLicense(
+  clientName: string,
+  daysActive = 30,
+  graceDays = 3,
+  lateFeePerDay = 500
+): Promise<LicenseItem> {
   const session = loadSession();
   const url = `${getApiBaseUrl()}/Api/ClientAccess/admin/create`;
   const res = await fetch(url, {
     method: "POST",
     headers: getAdminHeaders(),
-    body: JSON.stringify({ clientName, daysActive, adminKey: session?.accessKey || "" })
+    body: JSON.stringify({
+      clientName,
+      daysActive,
+      graceDays,
+      lateFeePerDay,
+      adminKey: session?.accessKey || ""
+    })
   });
   const data = await res.json();
   if (!data.success) {
     throw new Error(data.message || "Error al crear licencia.");
   }
   return data.data;
+}
+
+export async function deleteLicense(accessKey: string): Promise<{ success: boolean; message: string }> {
+  const session = loadSession();
+  const url = `${getApiBaseUrl()}/Api/ClientAccess/admin/delete`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: getAdminHeaders(),
+    body: JSON.stringify({ accessKey, adminKey: session?.accessKey || "" })
+  });
+  const data = await res.json();
+  if (!data.success) {
+    throw new Error(data.message || "Error al eliminar usuario.");
+  }
+  return data;
+}
+
+export async function toggleLicenseStatus(
+  accessKey: string,
+  status: "BLOCKED" | "ACTIVE" | "GRACE" | "EXCEPTION",
+  reason?: string | undefined,
+  overdueDays?: number | undefined
+): Promise<{ success: boolean; message: string }> {
+  const session = loadSession();
+  const url = `${getApiBaseUrl()}/Api/ClientAccess/admin/toggle-status`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: getAdminHeaders(),
+    body: JSON.stringify({
+      accessKey,
+      status,
+      overdueDays,
+      reason,
+      adminKey: session?.accessKey || ""
+    })
+  });
+  const data = await res.json();
+  if (!data.success) {
+    throw new Error(data.message || "Error al cambiar estado del usuario.");
+  }
+  return data;
+}
+
+export async function updateLicenseMora(params: {
+  accessKey: string;
+  graceDays: number;
+  lateFeePerDay: number;
+  overdueDays?: number | undefined;
+  status?: "ACTIVE" | "GRACE" | "BLOCKED" | "EXCEPTION" | undefined;
+  exceptionHours?: number | undefined;
+  manualAllowReason?: string | undefined;
+}): Promise<{ success: boolean; message: string }> {
+  const session = loadSession();
+  const url = `${getApiBaseUrl()}/Api/ClientAccess/admin/update-mora`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: getAdminHeaders(),
+    body: JSON.stringify({
+      ...params,
+      adminKey: session?.accessKey || ""
+    })
+  });
+  const data = await res.json();
+  if (!data.success) {
+    throw new Error(data.message || "Error al actualizar configuración de mora.");
+  }
+  return data;
 }
 
 export async function fetchAccessLogs(search = "", limit = 100): Promise<AccessLogItem[]> {

@@ -1,14 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Play, Check, Trash2,
-  Settings, Bot, Shield, Network, Users, Target, LogOut, Plus,
-  Eye, EyeOff, Monitor, Globe, Clock, Activity, RefreshCw
+  Settings, Bot, Shield, Network, Users, Target, LogOut, Plus, Minus,
+  Eye, EyeOff, Monitor, Globe, Clock, Activity, RefreshCw,
+  Ban, Unlock, AlertTriangle, DollarSign, Copy, X, SlidersHorizontal
 } from "lucide-react";
+import { toast } from "sonner";
 import { loadSession, clearSession } from "./auth/authApi";
 import {
   fetchAllLicenses,
   addLicenseDays,
   createNewLicense,
+  deleteLicense,
+  toggleLicenseStatus,
+  updateLicenseMora,
   fetchAccessLogs,
   type LicenseItem,
   type AccessLogItem
@@ -31,6 +36,11 @@ interface Config {
   PROXY_PORT_2: string;
   PROXY_USER_2: string;
   PROXY_PASS_2: string;
+  BOT_PROXY_TYPE: string;
+  BOT_PROXY_SERVER: string;
+  BOT_PROXY_PORT: string;
+  BOT_PROXY_USER: string;
+  BOT_PROXY_PASS: string;
   SECUENCIA: string[];
 }
 
@@ -39,6 +49,7 @@ export default function App() {
     KEY: "", KEYABS: "",
     PROXY_TYPE: "http", PROXY_SERVER: "", PROXY_PORT: "", PROXY_USER: "", PROXY_PASS: "",
     PROXY_TYPE_2: "http", PROXY_SERVER_2: "", PROXY_PORT_2: "", PROXY_USER_2: "", PROXY_PASS_2: "",
+    BOT_PROXY_TYPE: "http", BOT_PROXY_SERVER: "", BOT_PROXY_PORT: "", BOT_PROXY_USER: "", BOT_PROXY_PASS: "",
     SECUENCIA: []
   });
 
@@ -48,7 +59,6 @@ export default function App() {
   const [profileCount, setProfileCount] = useState(0);
   const [hitCount, setHitCount] = useState(0);
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving">("saved");
-  const [actionMsg, setActionMsg] = useState("");
 
   // Licencias Admin State
   const [licenses, setLicenses] = useState<LicenseItem[]>([]);
@@ -56,6 +66,30 @@ export default function App() {
   const [loadingLicenses, setLoadingLicenses] = useState(false);
   const [showProxyPass2, setShowProxyPass2] = useState(false);
   const [showBotProxyPass, setShowBotProxyPass] = useState(false);
+
+  // Modales personalizados (Reemplazo de alert / prompt / confirm nativos)
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [newClientName, setNewClientName] = useState("");
+  const [newClientDays, setNewClientDays] = useState("30");
+  const [newGraceDays, setNewGraceDays] = useState("3");
+  const [newLateFeePerDay, setNewLateFeePerDay] = useState("5");
+  const [createdLicenseModal, setCreatedLicenseModal] = useState<{
+    clientName: string;
+    accessKey: string;
+    days: number;
+  } | null>(null);
+
+  const [deleteTarget, setDeleteTarget] = useState<LicenseItem | null>(null);
+  const [clearSeqModalOpen, setClearSeqModalOpen] = useState(false);
+
+  // Modal de Configuración de Mora / Días / Bloqueo
+  const [moraTarget, setMoraTarget] = useState<LicenseItem | null>(null);
+  const [editGraceDays, setEditGraceDays] = useState("3");
+  const [editLateFeePerDay, setEditLateFeePerDay] = useState("5");
+  const [editOverdueDays, setEditOverdueDays] = useState("1");
+  const [editCustomDays, setEditCustomDays] = useState("");
+  const [editStatus, setEditStatus] = useState<"ACTIVE" | "GRACE" | "EXCEPTION" | "BLOCKED">("GRACE");
+  const [editReason, setEditReason] = useState("");
 
   // Auditoría y Logs Admin State
   const [adminSubTab, setAdminSubTab] = useState<"licenses" | "logs">("licenses");
@@ -191,18 +225,23 @@ export default function App() {
       setConfig(nextConfig);
       setNewSequence("");
       autoSaveConfig(nextConfig);
+      toast.success(`Secuencia ${cleaned} agregada`);
+    } else {
+      toast.info(`La secuencia ${cleaned} ya está en la lista`);
     }
   }
 
   function removeSequence(index: number) {
+    const removed = config.SECUENCIA[index];
     const nextSeqs = config.SECUENCIA.filter((_, i) => i !== index);
     const nextConfig = { ...config, SECUENCIA: nextSeqs };
     setConfig(nextConfig);
     autoSaveConfig(nextConfig);
+    if (removed) toast.info(`Secuencia ${removed} eliminada`);
   }
 
-  async function handleClearSequences() {
-    if (!window.confirm("¿Limpiar todas las secuencias activas?")) return;
+  async function confirmClearSequences() {
+    setClearSeqModalOpen(false);
     try {
       await fetch(`${API_URL}/clear-secuencias`, { method: "POST" });
     } catch {
@@ -211,34 +250,30 @@ export default function App() {
     const nextConfig = { ...config, SECUENCIA: [] };
     setConfig(nextConfig);
     autoSaveConfig(nextConfig);
-    flashMsg("Secuencias eliminadas.");
+    toast.success("Todas las secuencias fueron eliminadas.");
   }
 
   // Operaciones de Bot
   async function handleAction(endpoint: string, message: string, method = "POST") {
-    flashMsg(message);
+    toast.info(message);
     try {
       await fetch(`${API_URL}${endpoint}`, { method });
     } catch {
-      flashMsg("Error al conectar con el servidor auxiliar.");
+      toast.error("Error al conectar con el servidor auxiliar.");
     }
   }
 
   async function handleHits() {
-    flashMsg("Procesando reporte de hits...");
+    toast.info("Procesando reporte de hits...");
     try {
       const res = await fetch(`${API_URL}/hits`, { method: "POST" });
       const html = await res.text();
       const blob = new Blob([html], { type: "text/html" });
       window.open(URL.createObjectURL(blob), "_blank");
+      toast.success("Reporte de hits abierto en nueva pestaña.");
     } catch {
-      flashMsg("No se pudo obtener el reporte de hits.");
+      toast.error("No se pudo obtener el reporte de hits.");
     }
-  }
-
-  function flashMsg(text: string) {
-    setActionMsg(text);
-    setTimeout(() => setActionMsg(""), 3500);
   }
 
   function handleLogout() {
@@ -246,30 +281,152 @@ export default function App() {
     window.location.reload();
   }
 
-  async function handleAddDays(accessKey: string, days: number, clientName: string) {
+  async function handleAdjustDays(accessKey: string, days: number, clientName: string) {
     try {
       await addLicenseDays(accessKey, days);
-      flashMsg(`Se agregaron ${days} días a "${clientName}".`);
+      if (days > 0) {
+        toast.success(`+${days} días agregados a "${clientName}"`);
+      } else {
+        toast.warning(`${days} días descontados a "${clientName}"`);
+      }
       loadLicenses();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Error al sumar días.");
+      toast.error(err instanceof Error ? err.message : "Error al ajustar días.");
     }
   }
 
-  async function handleCreateLicense() {
-    const name = window.prompt("Nombre del cliente para la nueva licencia:", "Cliente");
-    if (!name || !name.trim()) return;
+  function openCreateLicenseModal() {
+    setNewClientName("");
+    setNewClientDays("30");
+    setNewGraceDays("3");
+    setNewLateFeePerDay("5");
+    setCreateModalOpen(true);
+  }
 
-    const daysStr = window.prompt("Días iniciales de vigencia:", "30") || "30";
-    const days = parseInt(daysStr, 10);
+  async function handleSubmitCreateLicense(e: React.FormEvent) {
+    e.preventDefault();
+    const name = newClientName.trim();
+    if (!name) {
+      toast.error("Ingresa el nombre del cliente.");
+      return;
+    }
+
+    const days = parseInt(newClientDays, 10);
+    const grace = parseInt(newGraceDays, 10);
+    const fee = parseFloat(newLateFeePerDay);
 
     try {
-      const created = await createNewLicense(name.trim(), isNaN(days) ? 30 : days);
-      flashMsg(`Licencia creada para "${name}".`);
+      const created = await createNewLicense(
+        name,
+        isNaN(days) ? 30 : days,
+        isNaN(grace) ? 3 : grace,
+        isNaN(fee) ? 5 : fee
+      );
+      setCreateModalOpen(false);
+      toast.success(`Licencia creada exitosamente para "${created.clientName}"`);
       loadLicenses();
-      alert(`Licencia generada:\nCliente: ${created.clientName}\nClave: ${created.accessKey}\nVigencia: ${days} días`);
+      setCreatedLicenseModal({
+        clientName: created.clientName,
+        accessKey: created.accessKey,
+        days: isNaN(days) ? 30 : days
+      });
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Error al crear licencia.");
+      toast.error(err instanceof Error ? err.message : "Error al crear licencia.");
+    }
+  }
+
+  async function handleToggleBlock(lic: LicenseItem) {
+    const isCurrentlyBlocked = lic.realAccessStatus === "BLOCKED";
+    const targetAction = isCurrentlyBlocked ? "ACTIVE" : "BLOCKED";
+    try {
+      const res = await toggleLicenseStatus(
+        lic.accessKey,
+        targetAction,
+        isCurrentlyBlocked ? undefined : "Bloqueado por falta de pago"
+      );
+      if (targetAction === "BLOCKED") {
+        toast.error(`Usuario "${lic.clientName}" bloqueado por falta de pago.`);
+      } else {
+        toast.success(res.message || `Usuario "${lic.clientName}" desbloqueado.`);
+      }
+      loadLicenses();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al cambiar estado del usuario.");
+    }
+  }
+
+  async function handleQuickMora(lic: LicenseItem) {
+    try {
+      const res = await toggleLicenseStatus(
+        lic.accessKey,
+        "GRACE",
+        "En mora por pago pendiente"
+      );
+      toast.warning(res.message || `Usuario "${lic.clientName}" puesto en Mora.`);
+      loadLicenses();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al activar Mora.");
+    }
+  }
+
+  function openMoraConfigModal(lic: LicenseItem) {
+    setMoraTarget(lic);
+    setEditGraceDays(String(lic.graceDays ?? 3));
+    setEditLateFeePerDay(String(lic.lateFeePerDay ?? 5));
+    setEditOverdueDays(String(lic.overdueDays > 0 ? lic.overdueDays : 1));
+    setEditCustomDays("");
+    const currentSt = (lic.realAccessStatus || "ACTIVE").toUpperCase();
+    if (currentSt === "BLOCKED" || currentSt === "GRACE" || currentSt === "EXCEPTION") {
+      setEditStatus(currentSt as "BLOCKED" | "GRACE" | "EXCEPTION");
+    } else {
+      setEditStatus("GRACE");
+    }
+    setEditReason(lic.manualAllowReason || "En mora por falta de pago");
+  }
+
+  async function handleSaveMoraModal(e: React.FormEvent) {
+    e.preventDefault();
+    if (!moraTarget) return;
+
+    try {
+      // Si el admin ingresó ajuste manual de días (+/-), aplicarlo primero
+      const customDaysNum = parseInt(editCustomDays, 10);
+      if (!isNaN(customDaysNum) && customDaysNum !== 0) {
+        await addLicenseDays(moraTarget.accessKey, customDaysNum);
+      }
+
+      const graceNum = parseInt(editGraceDays, 10);
+      const feeNum = parseFloat(editLateFeePerDay);
+      const overdueNum = parseInt(editOverdueDays, 10);
+
+      const res = await updateLicenseMora({
+        accessKey: moraTarget.accessKey,
+        graceDays: isNaN(graceNum) ? 3 : graceNum,
+        lateFeePerDay: isNaN(feeNum) ? 5 : feeNum,
+        overdueDays: editStatus === "GRACE" && !isNaN(overdueNum) ? overdueNum : undefined,
+        status: editStatus,
+        exceptionHours: editStatus === "EXCEPTION" ? 24 : undefined,
+        manualAllowReason: editReason.trim() || undefined
+      });
+
+      toast.success(res.message || `Configuración de Mora actualizada para "${moraTarget.clientName}".`);
+      setMoraTarget(null);
+      loadLicenses();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al guardar configuración de Mora.");
+    }
+  }
+
+  async function handleConfirmDeleteLicense() {
+    if (!deleteTarget) return;
+    const target = deleteTarget;
+    setDeleteTarget(null);
+    try {
+      const res = await deleteLicense(target.accessKey);
+      toast.success(res.message || `Usuario "${target.clientName}" eliminado permanentemente.`);
+      loadLicenses();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al eliminar el usuario.");
     }
   }
 
@@ -449,28 +606,32 @@ export default function App() {
               <span>{saveStatus === "saving" ? "Guardando..." : "Sincronizado"}</span>
             </div>
 
-            {/* Licencia Maestra Badge */}
+            {/* Licencia Maestra / Cliente Badge */}
             <div className="flex items-center gap-2 pl-3 border-l border-white/[0.06]">
               <span className="text-xs font-mono font-medium text-slate-300">{session?.clientName || "Administrador"}</span>
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#e5a93c]/15 text-[#e5a93c] border border-[#e5a93c]/30 font-bold uppercase">
                 {isMasterUser ? "Root" : "Cliente"}
               </span>
               {!isMasterUser && session?.daysLeft !== undefined && (
-                <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono font-semibold">
-                  {session.daysLeft}d restantes
+                <span
+                  className={`text-[10px] px-2 py-0.5 rounded font-mono font-semibold border ${
+                    session.daysLeft > 0
+                      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                      : "bg-rose-500/10 text-rose-400 border-rose-500/20"
+                  }`}
+                >
+                  {session.daysLeft > 0 ? `${session.daysLeft}d restantes` : "Vencida"}
+                </span>
+              )}
+              {!isMasterUser && (session?.accessStatus === "GRACE" || (session?.lateFeeAmount ?? 0) > 0) && (
+                <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 font-mono font-bold flex items-center gap-1">
+                  <AlertTriangle size={11} />
+                  MORA: ${(session?.lateFeeAmount ?? 0).toFixed(2)} USD
                 </span>
               )}
             </div>
           </div>
         </header>
-
-        {/* FEEDBACK NOTIFICACIÓN FLOTANTE */}
-        {actionMsg && (
-          <div className="mx-8 mt-4 px-4 py-2 rounded-lg bg-[#e5a93c]/10 border border-[#e5a93c]/25 text-[#e5a93c] text-xs font-medium flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#e5a93c]" />
-            {actionMsg}
-          </div>
-        )}
 
         {/* CUERPO PRINCIPAL SEGÚN PESTAÑA */}
         <div className="p-7 space-y-6">
@@ -541,7 +702,7 @@ export default function App() {
                   </button>
 
                   <button
-                    onClick={handleClearSequences}
+                    onClick={() => setClearSeqModalOpen(true)}
                     className="w-full py-2 px-4 rounded-lg bg-rose-500/10 hover:bg-rose-500/15 border border-rose-500/20 text-rose-300 font-medium text-xs flex items-center justify-center gap-2 transition-all"
                   >
                     <Trash2 size={14} />
@@ -654,7 +815,7 @@ export default function App() {
                     <div className="flex items-center justify-between">
                       <div className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
                         <Network size={13} className="text-[#e5a93c]" />
-                        Proxy Generador Leads
+                        Proxy Generador de Leads (ZabaSearch)
                       </div>
                       <span className="text-[10px] text-slate-500 font-mono">
                         Consumido por GENERARPERFILES
@@ -838,11 +999,18 @@ export default function App() {
                         value={licenseSearch}
                         onChange={(e) => setLicenseSearch(e.target.value)}
                         type="text"
-                        placeholder="Buscar cliente..."
+                        placeholder="Buscar cliente o clave..."
                         className="bg-[#0d1015] border border-white/[0.06] rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-[#e5a93c]/50 font-sans w-52"
                       />
                       <button
-                        onClick={handleCreateLicense}
+                        onClick={() => loadLicenses()}
+                        className="bg-white/[0.06] hover:bg-white/[0.1] text-slate-200 font-semibold px-2.5 py-1.5 rounded-lg text-xs flex items-center gap-1.5 border border-white/[0.08] transition-all"
+                        title="Actualizar lista de licencias"
+                      >
+                        <RefreshCw size={13} className={loadingLicenses ? "animate-spin text-[#e5a93c]" : ""} />
+                      </button>
+                      <button
+                        onClick={openCreateLicenseModal}
                         className="bg-[#d49a37] hover:bg-[#e5a93c] text-[#0b0d11] font-bold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 shadow-sm transition-all"
                       >
                         <Plus size={13} strokeWidth={3} />
@@ -875,18 +1043,18 @@ export default function App() {
                     <div className="flex items-center justify-between">
                       <div>
                         <h2 className="text-sm font-bold text-white uppercase tracking-wider">
-                          Administración de Licencias
+                          Administración de Licencias, Mora y Bloqueos
                         </h2>
                         <p className="text-xs text-slate-400 mt-0.5">
-                          Suma días a cualquier licencia en 1 solo clic sin abrir bases de datos externas.
+                          Suma o quita días, activa Mora por atraso, bloquea por falta de pago o elimina usuarios en 1 clic.
                         </p>
                       </div>
                     </div>
 
-                    {/* Counters */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {/* Counters (5 Tarjetas incluyendo Mora Acumulada) */}
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                       <div className="p-3 rounded-xl bg-[#0d1015] border border-white/[0.06]">
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total</span>
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Usuarios</span>
                         <div className="text-xl font-bold text-white font-mono mt-0.5">{licenses.length}</div>
                       </div>
                       <div className="p-3 rounded-xl bg-[#0d1015] border border-white/[0.06]">
@@ -895,16 +1063,25 @@ export default function App() {
                           {licenses.filter((l) => l.realAccessStatus === "ACTIVE").length}
                         </div>
                       </div>
-                      <div className="p-3 rounded-xl bg-[#0d1015] border border-white/[0.06]">
-                        <span className="text-[10px] font-bold text-[#e5a93c] uppercase tracking-wider">En Gracia</span>
+                      <div className="p-3 rounded-xl bg-[#0d1015] border border-amber-500/20">
+                        <span className="text-[10px] font-bold text-[#e5a93c] uppercase tracking-wider">En Mora / Gracia</span>
                         <div className="text-xl font-bold text-[#e5a93c] font-mono mt-0.5">
-                          {licenses.filter((l) => l.realAccessStatus === "GRACE").length}
+                          {licenses.filter((l) => l.realAccessStatus === "GRACE" || l.realAccessStatus === "EXCEPTION").length}
                         </div>
                       </div>
-                      <div className="p-3 rounded-xl bg-[#0d1015] border border-white/[0.06]">
-                        <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider">Bloqueadas</span>
+                      <div className="p-3 rounded-xl bg-[#0d1015] border border-rose-500/20">
+                        <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider">Bloqueadas (Impagas)</span>
                         <div className="text-xl font-bold text-rose-400 font-mono mt-0.5">
                           {licenses.filter((l) => l.realAccessStatus === "BLOCKED").length}
+                        </div>
+                      </div>
+                      <div className="p-3 rounded-xl bg-[#0d1015] border border-[#e5a93c]/25">
+                        <span className="text-[10px] font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1">
+                          <DollarSign size={11} />
+                          Mora Acumulada
+                        </span>
+                        <div className="text-xl font-bold text-amber-300 font-mono mt-0.5">
+                          ${licenses.reduce((acc, l) => acc + (l.lateFeeAmount || 0), 0).toFixed(2)}
                         </div>
                       </div>
                     </div>
@@ -918,21 +1095,21 @@ export default function App() {
                       ) : (
                         <table className="w-full text-left text-xs">
                           <thead>
-                            <tr className="text-slate-500 border-b border-white/[0.06]">
-                              <th className="pb-2.5 font-medium">Cliente</th>
-                              <th className="pb-2.5 font-medium">Clave</th>
-                              <th className="pb-2.5 font-medium">Estado</th>
-                              <th className="pb-2.5 font-medium">Días Restantes</th>
-                              <th className="pb-2.5 font-medium">Último Pago</th>
-                              <th className="pb-2.5 font-medium">Vencimiento</th>
-                              <th className="pb-2.5 font-medium text-right">Sumar Días (1 Clic)</th>
+                            <tr className="text-slate-500 border-b border-white/[0.06] text-[11px]">
+                              <th className="pb-2.5 pr-3 font-medium">Cliente</th>
+                              <th className="pb-2.5 px-2 font-medium">Clave</th>
+                              <th className="pb-2.5 px-2 font-medium">Estado</th>
+                              <th className="pb-2.5 px-2 font-medium">Vigencia</th>
+                              <th className="pb-2.5 px-2 font-medium">Mora / Recargo</th>
+                              <th className="pb-2.5 px-2 font-medium text-center">Quitar / Sumar Días</th>
+                              <th className="pb-2.5 pl-2 font-medium text-right">Control de Pago y Usuario</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-white/[0.03]">
+                          <tbody className="divide-y divide-white/[0.04]">
                             {filteredLicenses.map((lic) => {
                               const expDate = new Date(lic.expiresAt);
-                              const daysLeft = lic.daysLeft !== undefined 
-                                ? lic.daysLeft 
+                              const daysLeft = lic.daysLeft !== undefined
+                                ? lic.daysLeft
                                 : Math.max(0, Math.ceil((expDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
 
                               let badgeClass = "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
@@ -942,64 +1119,225 @@ export default function App() {
                                 badgeClass = "bg-[#e5a93c]/15 text-[#e5a93c] border-[#e5a93c]/30";
                                 badgeText = "ROOT";
                               } else if (lic.realAccessStatus === "GRACE") {
-                                badgeClass = "bg-[#e5a93c]/10 text-[#e5a93c] border-[#e5a93c]/20";
-                                badgeText = `GRACIA (${lic.overdueDays}d)`;
+                                badgeClass = "bg-amber-500/15 text-amber-300 border-amber-500/30";
+                                badgeText = `EN MORA (${lic.overdueDays}d)`;
+                              } else if (lic.realAccessStatus === "EXCEPTION") {
+                                badgeClass = "bg-sky-500/15 text-sky-300 border-sky-500/30";
+                                badgeText = "EXCEPCIÓN 24H";
                               } else if (lic.realAccessStatus === "BLOCKED") {
-                                badgeClass = "bg-rose-500/10 text-rose-400 border-rose-500/20";
-                                badgeText = "BLOQUEADA";
+                                badgeClass = "bg-rose-500/15 text-rose-400 border-rose-500/30";
+                                badgeText = lic.accessStatus === "DISABLED" ? "BLOQUEADO (IMPAGO)" : "BLOQUEADO (VENCIDO)";
                               }
+
+                              const hasMora = (lic.lateFeeAmount ?? 0) > 0 || lic.realAccessStatus === "GRACE";
 
                               return (
                                 <tr key={lic.accessId} className="hover:bg-white/[0.015] transition-colors">
-                                  <td className="py-2.5 font-medium text-white">{lic.clientName}</td>
-                                  <td className="py-2.5 font-mono text-[#e5a93c] font-semibold">{lic.accessKey}</td>
-                                  <td className="py-2.5">
-                                    <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${badgeClass}`}>
+                                  {/* Cliente */}
+                                  <td className="py-3 pr-3">
+                                    <div className="font-semibold text-white">{lic.clientName}</div>
+                                    <div className="text-[10px] text-slate-500 font-mono">
+                                      Últ. pago: {lic.lastPaymentAt ? new Date(lic.lastPaymentAt).toLocaleDateString("es-ES") : "Sin registro"}
+                                    </div>
+                                  </td>
+
+                                  {/* Clave con botón Copiar */}
+                                  <td className="py-3 px-2 font-mono">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-[#e5a93c] font-semibold">{lic.accessKey}</span>
+                                      <button
+                                        onClick={() => {
+                                          navigator.clipboard.writeText(lic.accessKey);
+                                          toast.success(`Clave de "${lic.clientName}" copiada`);
+                                        }}
+                                        className="p-1 rounded hover:bg-white/[0.06] text-slate-500 hover:text-slate-200 transition-colors"
+                                        title="Copiar clave"
+                                      >
+                                        <Copy size={11} />
+                                      </button>
+                                    </div>
+                                  </td>
+
+                                  {/* Estado */}
+                                  <td className="py-3 px-2 whitespace-nowrap">
+                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${badgeClass}`}>
                                       {badgeText}
                                     </span>
-                                  </td>
-                                  <td className="py-2.5 font-mono">
-                                    {lic.isMaster ? (
-                                      <span className="text-[#e5a93c] text-xs">Ilimitado</span>
-                                    ) : (
-                                      <span className={daysLeft > 0 ? "text-emerald-400 font-semibold" : "text-rose-400 font-semibold"}>
-                                        {daysLeft > 0 ? `${daysLeft}d` : "Vencida"}
-                                      </span>
+                                    {lic.manualAllowReason && !lic.isMaster && (
+                                      <div className="text-[10px] text-slate-500 mt-0.5 max-w-[140px] truncate" title={lic.manualAllowReason}>
+                                        {lic.manualAllowReason}
+                                      </div>
                                     )}
                                   </td>
-                                  <td className="py-2.5 font-mono text-slate-400 text-[11px]">
-                                    {lic.lastPaymentAt ? new Date(lic.lastPaymentAt).toLocaleDateString("es-ES") : "Sin registro"}
+
+                                  {/* Vigencia y Días Restantes */}
+                                  <td className="py-3 px-2 font-mono whitespace-nowrap">
+                                    {lic.isMaster ? (
+                                      <span className="text-[#e5a93c] text-xs font-semibold">Permanente</span>
+                                    ) : (
+                                      <div>
+                                        <span className={daysLeft > 0 ? "text-emerald-400 font-bold" : "text-rose-400 font-bold"}>
+                                          {daysLeft > 0 ? `${daysLeft}d restantes` : `Vencida (${lic.overdueDays}d atraso)`}
+                                        </span>
+                                        <div className="text-[10px] text-slate-500">
+                                          Vence: {expDate.toLocaleDateString("es-ES")}
+                                        </div>
+                                      </div>
+                                    )}
                                   </td>
-                                  <td className="py-2.5 font-mono text-slate-300">
-                                    {lic.isMaster
-                                      ? "Permanente"
-                                      : expDate.toLocaleDateString("es-ES")}
+
+                                  {/* Columna de MORA */}
+                                  <td className="py-3 px-2 font-mono whitespace-nowrap">
+                                    {lic.isMaster ? (
+                                      <span className="text-slate-600 text-xs">—</span>
+                                    ) : (
+                                      <div>
+                                        <div className={`font-bold text-xs flex items-center gap-1 ${hasMora ? "text-amber-300" : "text-slate-400"}`}>
+                                          <span>${(lic.lateFeeAmount ?? 0).toFixed(2)} USD</span>
+                                          {hasMora && (
+                                            <span className="px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[9px] font-bold">
+                                              MORA
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="text-[10px] text-slate-500">
+                                          ${lic.lateFeePerDay ?? 5}/día • Gracia: {lic.graceDays ?? 3}d
+                                        </div>
+                                      </div>
+                                    )}
                                   </td>
-                                  <td className="py-2.5 text-right space-x-1">
-                                    <button
-                                      onClick={() => handleAddDays(lic.accessKey, 7, lic.clientName)}
-                                      className="px-2 py-1 bg-white/[0.04] hover:bg-white/[0.08] text-slate-200 border border-white/[0.08] font-medium text-xs rounded transition-all"
-                                    >
-                                      +7d
-                                    </button>
-                                    <button
-                                      onClick={() => handleAddDays(lic.accessKey, 15, lic.clientName)}
-                                      className="px-2 py-1 bg-white/[0.04] hover:bg-white/[0.08] text-slate-200 border border-white/[0.08] font-medium text-xs rounded transition-all"
-                                    >
-                                      +15d
-                                    </button>
-                                    <button
-                                      onClick={() => handleAddDays(lic.accessKey, 30, lic.clientName)}
-                                      className="px-2.5 py-1 bg-[#d49a37] hover:bg-[#e5a93c] text-[#0b0d11] font-bold text-xs rounded transition-all shadow-sm"
-                                    >
-                                      +30d
-                                    </button>
-                                    <button
-                                      onClick={() => handleAddDays(lic.accessKey, 60, lic.clientName)}
-                                      className="px-2 py-1 bg-white/[0.04] hover:bg-white/[0.08] text-slate-200 border border-white/[0.08] font-medium text-xs rounded transition-all"
-                                    >
-                                      +60d
-                                    </button>
+
+                                  {/* Quitar Días y Sumar Días */}
+                                  <td className="py-3 px-2 whitespace-nowrap">
+                                    {lic.isMaster ? (
+                                      <div className="text-center text-[11px] text-slate-600 italic">Licencia Root</div>
+                                    ) : (
+                                      <div className="flex flex-col gap-1 items-center">
+                                        {/* Fila Sumar Días */}
+                                        <div className="flex items-center gap-1">
+                                          <button
+                                            onClick={() => handleAdjustDays(lic.accessKey, 7, lic.clientName)}
+                                            className="px-2 py-0.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/25 font-mono font-semibold text-[11px] rounded transition-all"
+                                            title="Sumar 7 días"
+                                          >
+                                            +7d
+                                          </button>
+                                          <button
+                                            onClick={() => handleAdjustDays(lic.accessKey, 15, lic.clientName)}
+                                            className="px-2 py-0.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/25 font-mono font-semibold text-[11px] rounded transition-all"
+                                            title="Sumar 15 días"
+                                          >
+                                            +15d
+                                          </button>
+                                          <button
+                                            onClick={() => handleAdjustDays(lic.accessKey, 30, lic.clientName)}
+                                            className="px-2 py-0.5 bg-[#d49a37] hover:bg-[#e5a93c] text-[#0b0d11] font-mono font-bold text-[11px] rounded transition-all shadow-sm"
+                                            title="Sumar 30 días"
+                                          >
+                                            +30d
+                                          </button>
+                                          <button
+                                            onClick={() => handleAdjustDays(lic.accessKey, 60, lic.clientName)}
+                                            className="px-2 py-0.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/25 font-mono font-semibold text-[11px] rounded transition-all"
+                                            title="Sumar 60 días"
+                                          >
+                                            +60d
+                                          </button>
+                                        </div>
+
+                                        {/* Fila Quitar Días */}
+                                        <div className="flex items-center gap-1">
+                                          <button
+                                            onClick={() => handleAdjustDays(lic.accessKey, -1, lic.clientName)}
+                                            className="px-2 py-0.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/25 font-mono font-semibold text-[11px] rounded transition-all"
+                                            title="Quitar 1 día"
+                                          >
+                                            -1d
+                                          </button>
+                                          <button
+                                            onClick={() => handleAdjustDays(lic.accessKey, -7, lic.clientName)}
+                                            className="px-2 py-0.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/25 font-mono font-semibold text-[11px] rounded transition-all"
+                                            title="Quitar 7 días"
+                                          >
+                                            -7d
+                                          </button>
+                                          <button
+                                            onClick={() => handleAdjustDays(lic.accessKey, -15, lic.clientName)}
+                                            className="px-2 py-0.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/25 font-mono font-semibold text-[11px] rounded transition-all"
+                                            title="Quitar 15 días"
+                                          >
+                                            -15d
+                                          </button>
+                                          <button
+                                            onClick={() => handleAdjustDays(lic.accessKey, -30, lic.clientName)}
+                                            className="px-2 py-0.5 bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 font-mono font-bold text-[11px] rounded transition-all"
+                                            title="Quitar 30 días"
+                                          >
+                                            -30d
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </td>
+
+                                  {/* Acciones: Mora, Bloquear por falta de pago, Configurar, Borrar */}
+                                  <td className="py-3 pl-2 text-right whitespace-nowrap">
+                                    {lic.isMaster ? (
+                                      <span className="text-[11px] text-slate-600 font-mono">Protegido</span>
+                                    ) : (
+                                      <div className="inline-flex items-center gap-1.5">
+                                        {/* Botón Poner en Mora Rápido */}
+                                        {lic.realAccessStatus !== "GRACE" && (
+                                          <button
+                                            onClick={() => handleQuickMora(lic)}
+                                            className="px-2 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/25 text-[11px] font-semibold flex items-center gap-1 transition-all"
+                                            title="Poner usuario en Mora (Periodo de Gracia con recargo)"
+                                          >
+                                            <AlertTriangle size={12} />
+                                            Mora
+                                          </button>
+                                        )}
+
+                                        {/* Botón Configurar Mora / Días Exactos */}
+                                        <button
+                                          onClick={() => openMoraConfigModal(lic)}
+                                          className="p-1.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.09] text-slate-300 border border-white/[0.08] transition-all"
+                                          title="Configurar Mora ($/día, días de gracia, atraso y estado)"
+                                        >
+                                          <SlidersHorizontal size={13} />
+                                        </button>
+
+                                        {/* Botón Bloquear / Desbloquear por falta de pago */}
+                                        {lic.realAccessStatus === "BLOCKED" ? (
+                                          <button
+                                            onClick={() => handleToggleBlock(lic)}
+                                            className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-[11px] font-semibold flex items-center gap-1 transition-all"
+                                            title="Desbloquear y reactivar usuario"
+                                          >
+                                            <Unlock size={12} />
+                                            Desbloquear
+                                          </button>
+                                        ) : (
+                                          <button
+                                            onClick={() => handleToggleBlock(lic)}
+                                            className="px-2.5 py-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-[11px] font-semibold flex items-center gap-1 transition-all"
+                                            title="Bloquear acceso inmediatamente por falta de pago"
+                                          >
+                                            <Ban size={12} />
+                                            Bloquear
+                                          </button>
+                                        )}
+
+                                        {/* Botón Eliminar / Borrar Usuario */}
+                                        <button
+                                          onClick={() => setDeleteTarget(lic)}
+                                          className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 text-rose-400 border border-rose-500/20 transition-all"
+                                          title="Eliminar usuario permanentemente"
+                                        >
+                                          <Trash2 size={13} />
+                                        </button>
+                                      </div>
+                                    )}
                                   </td>
                                 </tr>
                               );
@@ -1126,6 +1464,433 @@ export default function App() {
         </div>
 
       </main>
+
+      {/* =====================================================================
+          MODAL 1: CREAR NUEVA LICENCIA
+      ===================================================================== */}
+      {createModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-[#131720] border border-white/[0.08] rounded-2xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-[#e5a93c]/15 border border-[#e5a93c]/30 flex items-center justify-center text-[#e5a93c]">
+                  <Plus size={16} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Nueva Licencia de Cliente</h3>
+                  <p className="text-[11px] text-slate-400">Configura vigencia inicial y parámetros de Mora</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setCreateModalOpen(false)}
+                className="text-slate-500 hover:text-white p-1 rounded-lg"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitCreateLicense} className="space-y-3.5">
+              <div>
+                <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+                  Nombre del Cliente / Usuario
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  required
+                  value={newClientName}
+                  onChange={(e) => setNewClientName(e.target.value)}
+                  placeholder="Ej: Carlos Oficina 2"
+                  className="w-full bg-[#0b0d11] border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-[#e5a93c]/60"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-2.5">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+                    Días Activos
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={3650}
+                    value={newClientDays}
+                    onChange={(e) => setNewClientDays(e.target.value)}
+                    className="w-full bg-[#0b0d11] border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-[#e5a93c]/60"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+                    Días de Gracia
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={60}
+                    value={newGraceDays}
+                    onChange={(e) => setNewGraceDays(e.target.value)}
+                    className="w-full bg-[#0b0d11] border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-[#e5a93c]/60"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+                    Mora / Día (USD)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min={0}
+                    value={newLateFeePerDay}
+                    onChange={(e) => setNewLateFeePerDay(e.target.value)}
+                    className="w-full bg-[#0b0d11] border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-[#e5a93c]/60"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/[0.06]">
+                <button
+                  type="button"
+                  onClick={() => setCreateModalOpen(false)}
+                  className="px-3.5 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-white/[0.04]"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-lg text-xs font-bold bg-[#d49a37] hover:bg-[#e5a93c] text-[#0b0d11] shadow-sm transition-all"
+                >
+                  Generar Licencia
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================================
+          MODAL 2: CLAVE DE LICENCIA RECIÉN GENERADA
+      ===================================================================== */}
+      {createdLicenseModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-[#131720] border border-[#e5a93c]/30 rounded-2xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                  <Check size={16} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">¡Licencia Creada con Éxito!</h3>
+                  <p className="text-[11px] text-slate-400">Comparte esta clave de acceso con el cliente</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setCreatedLicenseModal(null)}
+                className="text-slate-500 hover:text-white p-1 rounded-lg"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="p-4 rounded-xl bg-[#0b0d11] border border-white/[0.06] space-y-2">
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-400">Cliente:</span>
+                <span className="text-white font-semibold">{createdLicenseModal.clientName}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-400">Vigencia:</span>
+                <span className="text-emerald-400 font-mono font-semibold">{createdLicenseModal.days} días</span>
+              </div>
+              <div className="pt-2 border-t border-white/[0.06] flex items-center justify-between">
+                <span className="text-xs text-slate-400">Clave:</span>
+                <span className="text-base font-mono font-bold text-[#e5a93c] tracking-wider">
+                  {createdLicenseModal.accessKey}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(createdLicenseModal.accessKey);
+                  toast.success("Clave copiada al portapapeles");
+                }}
+                className="flex-1 py-2 px-4 rounded-lg bg-[#d49a37] hover:bg-[#e5a93c] text-[#0b0d11] font-bold text-xs flex items-center justify-center gap-1.5"
+              >
+                <Copy size={13} />
+                Copiar Clave
+              </button>
+              <button
+                onClick={() => setCreatedLicenseModal(null)}
+                className="py-2 px-4 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-slate-200 font-semibold text-xs"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================================
+          MODAL 3: CONFIGURAR MORA, DÍAS Y ESTADO DE PAGO DEL USUARIO
+      ===================================================================== */}
+      {moraTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+          <div className="w-full max-w-lg bg-[#131720] border border-white/[0.08] rounded-2xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-300">
+                  <DollarSign size={16} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">
+                    Gestión de Mora, Pago y Días — {moraTarget.clientName}
+                  </h3>
+                  <p className="text-[11px] text-slate-400 font-mono">{moraTarget.accessKey}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setMoraTarget(null)}
+                className="text-slate-500 hover:text-white p-1 rounded-lg"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveMoraModal} className="space-y-4">
+              {/* Selector de Estado */}
+              <div>
+                <label className="text-[11px] font-semibold text-slate-300 block mb-1.5">
+                  Estado de Acceso del Usuario
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditStatus("ACTIVE")}
+                    className={`py-2 px-2.5 rounded-lg text-xs font-bold border transition-all ${
+                      editStatus === "ACTIVE"
+                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                        : "bg-[#0b0d11] text-slate-400 border-white/[0.06] hover:text-white"
+                    }`}
+                  >
+                    Activa
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditStatus("GRACE")}
+                    className={`py-2 px-2.5 rounded-lg text-xs font-bold border transition-all ${
+                      editStatus === "GRACE"
+                        ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                        : "bg-[#0b0d11] text-slate-400 border-white/[0.06] hover:text-white"
+                    }`}
+                  >
+                    En Mora (Gracia)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditStatus("EXCEPTION")}
+                    className={`py-2 px-2.5 rounded-lg text-xs font-bold border transition-all ${
+                      editStatus === "EXCEPTION"
+                        ? "bg-sky-500/20 text-sky-300 border-sky-500/40"
+                        : "bg-[#0b0d11] text-slate-400 border-white/[0.06] hover:text-white"
+                    }`}
+                  >
+                    Excepción 24h
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditStatus("BLOCKED")}
+                    className={`py-2 px-2.5 rounded-lg text-xs font-bold border transition-all ${
+                      editStatus === "BLOCKED"
+                        ? "bg-rose-500/20 text-rose-300 border-rose-500/40"
+                        : "bg-[#0b0d11] text-slate-400 border-white/[0.06] hover:text-white"
+                    }`}
+                  >
+                    Bloqueado
+                  </button>
+                </div>
+              </div>
+
+              {/* Parámetros de Mora */}
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+                    Mora por Día (USD)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min={0}
+                    value={editLateFeePerDay}
+                    onChange={(e) => setEditLateFeePerDay(e.target.value)}
+                    className="w-full bg-[#0b0d11] border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-[#e5a93c]/60"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+                    Días de Gracia
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={90}
+                    value={editGraceDays}
+                    onChange={(e) => setEditGraceDays(e.target.value)}
+                    className="w-full bg-[#0b0d11] border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-[#e5a93c]/60"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+                    Días de Atraso (Mora)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={90}
+                    disabled={editStatus !== "GRACE"}
+                    value={editOverdueDays}
+                    onChange={(e) => setEditOverdueDays(e.target.value)}
+                    className="w-full bg-[#0b0d11] border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-[#e5a93c]/60 disabled:opacity-40"
+                  />
+                </div>
+              </div>
+
+              {/* Ajuste personalizado de días (+ o -) */}
+              <div className="p-3 rounded-xl bg-[#0b0d11] border border-white/[0.06] space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
+                    <Minus size={12} className="text-rose-400" />
+                    <Plus size={12} className="text-emerald-400" />
+                    Sumar o Quitar Días Personalizados (Opcional)
+                  </label>
+                  <span className="text-[10px] text-slate-500 font-mono">Ej: -5 para quitar 5 días, 10 para sumar</span>
+                </div>
+                <input
+                  type="number"
+                  value={editCustomDays}
+                  onChange={(e) => setEditCustomDays(e.target.value)}
+                  placeholder="Dejar vacío para no alterar (Ej: -3 o +12)"
+                  className="w-full bg-[#131720] border border-white/[0.08] rounded-lg px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-[#e5a93c]/60"
+                />
+              </div>
+
+              {/* Motivo / Nota */}
+              <div>
+                <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+                  Motivo / Nota para el Cliente
+                </label>
+                <input
+                  type="text"
+                  value={editReason}
+                  onChange={(e) => setEditReason(e.target.value)}
+                  placeholder="Ej: En mora por falta de pago mensual"
+                  className="w-full bg-[#0b0d11] border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-[#e5a93c]/60"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/[0.06]">
+                <button
+                  type="button"
+                  onClick={() => setMoraTarget(null)}
+                  className="px-3.5 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-white/[0.04]"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-lg text-xs font-bold bg-[#d49a37] hover:bg-[#e5a93c] text-[#0b0d11] shadow-sm transition-all"
+                >
+                  Guardar Cambios
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================================
+          MODAL 4: CONFIRMAR ELIMINACIÓN DE USUARIO / LICENCIA
+      ===================================================================== */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-[#131720] border border-rose-500/30 rounded-2xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0">
+                <Trash2 size={18} />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">¿Eliminar usuario permanentemente?</h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Esta acción borrará la licencia y desconectará al usuario de inmediato.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-[#0b0d11] border border-white/[0.06] text-xs space-y-1">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Usuario:</span>
+                <span className="text-white font-semibold">{deleteTarget.clientName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Clave:</span>
+                <span className="text-[#e5a93c] font-mono font-semibold">{deleteTarget.accessKey}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="px-4 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-white/[0.04]"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmDeleteLicense}
+                className="px-4 py-2 rounded-lg text-xs font-bold bg-rose-500 hover:bg-rose-600 text-white shadow-sm transition-all flex items-center gap-1.5"
+              >
+                <Trash2 size={13} />
+                Sí, Borrar Usuario
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================================
+          MODAL 5: CONFIRMAR LIMPIEZA DE SECUENCIAS
+      ===================================================================== */}
+      {clearSeqModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm bg-[#131720] border border-rose-500/30 rounded-2xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0">
+                <Trash2 size={16} />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">¿Limpiar todas las secuencias?</h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Se vaciarán las {config.SECUENCIA.length} secuencias activas del bot.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                onClick={() => setClearSeqModalOpen(false)}
+                className="px-3.5 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-white/[0.04]"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmClearSequences}
+                className="px-4 py-2 rounded-lg text-xs font-bold bg-rose-500 hover:bg-rose-600 text-white shadow-sm transition-all"
+              >
+                Vaciar Secuencias
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
