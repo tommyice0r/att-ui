@@ -648,7 +648,7 @@ export default function App() {
             <div className="space-y-6">
 
               {/* 3 METRIC TILES */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="bg-[#151820] border border-white/[0.06] rounded-xl p-4">
                   <div className="text-xs text-slate-400 flex items-center gap-1.5">
                     <Users size={14} className="text-slate-500" />
@@ -659,6 +659,34 @@ export default function App() {
                   </div>
                   <div className="text-[10px] text-slate-500 mt-1">Instancias en espera</div>
                 </div>
+                {/* 4TA CARD: PROGRESO FLASH */}
+                <div className="bg-[#151820] border border-white/[0.06] rounded-xl p-4 relative overflow-hidden">
+                  <div className="text-xs text-slate-400 flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-amber-400 font-semibold">
+                      <Zap size={14} className="text-amber-400 fill-amber-400" />
+                      Cola Flash (0-9999)
+                    </div>
+                    {flashProgress?.status === "running" && (
+                      <span className="flex h-2 w-2 relative">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-2xl font-bold text-white font-mono mt-1 flex items-baseline gap-2">
+                    <span>
+                      {flashProgress?.current_suffix !== undefined
+                        ? (10000 - Number(flashProgress.current_suffix || 0)).toLocaleString()
+                        : "10,000"}
+                    </span>
+                    <span className="text-[11px] font-normal text-slate-500">faltantes</span>
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-1 flex items-center justify-between">
+                    <span>Secuencia: <strong className="text-slate-300 font-mono">{flashProgress?.active_sequence || config.SECUENCIA[0] || "---"}</strong></span>
+                    <span>Actual: <strong className="text-amber-400 font-mono">{flashProgress?.last_number ? flashProgress.last_number.slice(-4) : "0000"}</strong></span>
+                  </div>
+                </div>
+
 
                 <div className="bg-[#151820] border border-white/[0.06] rounded-xl p-4">
                   <div className="text-xs text-slate-400 flex items-center gap-1.5">
