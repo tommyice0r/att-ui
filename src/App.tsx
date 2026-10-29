@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  Play, Check, Trash2,
+  Play, Check, Trash2, Zap,
   Settings, Bot, Shield, Network, Users, Target, LogOut, Plus, Minus,
   Eye, EyeOff, Monitor, Globe, Clock, Activity, RefreshCw,
   Ban, Unlock, AlertTriangle, DollarSign, Copy, X, SlidersHorizontal
@@ -684,6 +684,14 @@ export default function App() {
                   <div className="pb-2 border-b border-white/[0.06]">
                     <h2 className="text-xs font-bold uppercase tracking-wider text-slate-300">Operación</h2>
                   </div>
+
+                  <button
+                    onClick={() => handleAction("/start-flash", "Iniciando Bot Flash (0000-9999)...", "POST")}
+                    className="w-full py-2.5 px-4 rounded-lg bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 hover:from-amber-400 hover:to-yellow-300 text-[#0b0d11] font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-md hover:shadow-amber-500/20 transition-all active:scale-[0.99] border border-amber-300/40"
+                  >
+                    <Zap size={15} fill="currentColor" className="text-[#0b0d11]" />
+                    ⚡ Iniciar Bot Flash
+                  </button>
 
                   <button
                     onClick={() => handleAction("/Create", "Iniciando bot...", "GET")}
