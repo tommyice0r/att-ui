@@ -56,6 +56,13 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<"bot" | "admin">("bot");
   const [serverOnline, setServerOnline] = useState(false);
   const [newSequence, setNewSequence] = useState("");
+  const [flashProgress, setFlashProgress] = useState<{
+    active_sequence?: string;
+    current_suffix?: number;
+    total_tested?: number;
+    last_number?: string;
+    status?: string;
+  }>({});
   const [profileCount, setProfileCount] = useState(0);
   const [hitCount, setHitCount] = useState(0);
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving">("saved");
@@ -684,6 +691,29 @@ export default function App() {
                   <div className="pb-2 border-b border-white/[0.06]">
                     <h2 className="text-xs font-bold uppercase tracking-wider text-slate-300">Operación</h2>
                   </div>
+
+                  {/* MONITOR EN VIVO BOT FLASH */}
+                  {flashProgress.status && flashProgress.status !== "idle" && (
+                    <div className="p-3 rounded-xl bg-amber-500/[0.08] border border-amber-500/20 space-y-1.5 animate-fadeIn">
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="font-bold text-amber-300 flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                          FLASH EN VIVO
+                        </span>
+                        <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-amber-400/10 text-amber-300">
+                          {flashProgress.status === "finished" ? "Completado" : "Procesando"}
+                        </span>
+                      </div>
+                      <div className="text-xs font-mono font-bold text-white flex items-baseline justify-between">
+                        <span className="text-slate-400 text-[11px]">Número actual:</span>
+                        <span className="text-amber-400 text-sm tracking-wider">{flashProgress.last_number || "Iniciando..."}</span>
+                      </div>
+                      <div className="text-[11px] text-slate-400 font-mono flex justify-between">
+                        <span>Secuencia: <strong className="text-slate-200">{flashProgress.active_sequence || "N/A"}</strong></span>
+                        <span>Sufijo: <strong className="text-slate-200">{String(flashProgress.current_suffix || 0).padStart(4, '0')}/9999</strong></span>
+                      </div>
+                    </div>
+                  )}
 
                   <button
                     onClick={() => handleAction("/start-flash", "Iniciando Bot Flash (0000-9999)...", "POST")}
